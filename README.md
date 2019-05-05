@@ -8,7 +8,11 @@ Control Broadlink devices with Python 3 using asyncio (single threaded with even
 import sys
 import logging
 import traceback
+from pybroadlink.broadlink_udp import BroadlinkRM3
+import asyncio
+import binascii
 from base64 import b64decode
+from pybroadlink import _LOGGER
 async def testFake(n):
     for i in range(n):
         _LOGGER.debug("Counter is %d",i)
