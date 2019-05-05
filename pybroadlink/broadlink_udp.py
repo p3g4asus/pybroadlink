@@ -373,7 +373,7 @@ class BroadlinkRM3(BroadlinkUDP):
                 return CD_RETURN_IMMEDIATELY,payload[0x04:]
         return CD_CONTINUE_WAITING
     
-    async def learn_ir_get(self,timeout=30):
+    async def get_learned_key(self,timeout=30):
         tim = max([5,timeout])
         payload = bytearray(16)
         payload[0] = 4
@@ -421,7 +421,7 @@ if __name__ == '__main__': # pragma: no cover
         rv = await a.enter_learning_mode()
         if rv:
             _LOGGER.info("Entered learning mode (%s): please press key",rv)
-            rv = await a.learn_ir_get(30)
+            rv = await a.get_learned_key(30)
             if rv:
                 _LOGGER.info("Obtained %s",binascii.hexlify(rv[0]).decode('utf-8'))
             else:
