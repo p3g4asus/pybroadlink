@@ -358,7 +358,11 @@ class BroadlinkRM3(BroadlinkUDP):
     async def emit_ir(self,databytes,timeout=-1,retry=3):
         payload = bytearray([0x02, 0x00, 0x00, 0x00])
         payload += databytes
-        return await self._protocol(partial(self._decorate_packet, 0x6a, payload),self._check_generic_packet,timeout,retry,True)
+        rv = await self._protocol(partial(self._decorate_packet, 0x6a, payload),self._check_generic_packet,timeout,retry,True)
+        if rv:
+            return rv[0]
+        else:
+            return None
     
     async def enter_learning_mode(self,timeout=-1,retry=3):
         payload = bytearray(16)
@@ -383,7 +387,7 @@ class BroadlinkRM3(BroadlinkUDP):
             await asyncio.sleep(5)
             rv = await self._protocol(packet,self._check_learn_ir_get_packet,self._timeout,1,True)
             if rv:
-                return rv
+                return rv[0]
         return None
     
 if __name__ == '__main__': # pragma: no cover
@@ -412,7 +416,7 @@ if __name__ == '__main__': # pragma: no cover
         a = BroadlinkRM3((args[2],PORT),args[3])
         rv = await a.emit_ir(payload,retry=1)
         if rv:
-            _LOGGER.info("Emit OK %s",binascii.hexlify(rv[0]).decode('utf-8'))
+            _LOGGER.info("Emit OK %s",binascii.hexlify(rv).decode('utf-8'))
         else:
             _LOGGER.warning("Emit failed")
         a.destroy_remote()
@@ -423,7 +427,7 @@ if __name__ == '__main__': # pragma: no cover
             _LOGGER.info("Entered learning mode (%s): please press key",rv)
             rv = await a.get_learned_key(30)
             if rv:
-                _LOGGER.info("Obtained %s",binascii.hexlify(rv[0]).decode('utf-8'))
+                _LOGGER.info("Obtained %s",binascii.hexlify(rv).decode('utf-8'))
             else:
                 _LOGGER.warning("No key pressed")
         else:
