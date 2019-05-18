@@ -98,6 +98,7 @@ class BroadlinkUDP:
         self._devtype = devtype
         self._timeout = timeout
         self._remote = None
+        self._force_auth = False
         self._key = BroadlinkUDP.KEY
         self._iv = BroadlinkUDP.IV
         self._id = BroadlinkUDP.ID
@@ -140,6 +141,7 @@ class BroadlinkUDP:
     async def _init_remote(self,ensure_auth,**kwargs):
         if not self._remote:
             try:
+                self._force_auth = True
                 if 'local_addr' not in kwargs:
                     if not len(self._local_addr):
                         remtmp = await open_remote_endpoint(*self._hp)
@@ -149,17 +151,19 @@ class BroadlinkUDP:
                     self._remote = await open_remote_endpoint(*self._hp,**kwargs)
                 else:
                     self._remote = await open_local_endpoint(*kwargs['local_addr'],**kwargs)
-                if self._remote and ensure_auth:
-                    if not await self.auth():
-                        self.destroy_remote()
-                    else:
-                        _LOGGER.info("%s:%d auth OK",*self._hp)
             except BaseException as ex:
                 _LOGGER.error("Open endpoint error %s",str(ex))
                 self._remote = None
             except:
                 _LOGGER.error("Open endpoint error")
                 self._remote = None
+        if self._remote and ensure_auth and self._force_auth:
+            if not await self.auth():
+                _LOGGER.warning("%s:%d auth FAIL",*self._hp)
+                self.destroy_remote()
+            else:
+                _LOGGER.info("%s:%d auth OK",*self._hp)
+                self._force_auth = False
         return self._remote
     
     def destroy_remote(self):
@@ -198,7 +202,11 @@ class BroadlinkUDP:
     
     def _check_generic_packet(self,data,addr):
         #print("CHECK ",data," ",len(data)>0x23," ",(data[0x22] | (data[0x23] << 8)))
-        return CD_RETURN_IMMEDIATELY if len(data)>0x23 and (data[0x22] | (data[0x23] << 8))==0 else CD_ABORT_AND_RETRY
+        if len(data)>0x23 and (data[0x22] | (data[0x23] << 8))==0:
+            return CD_RETURN_IMMEDIATELY
+        else: 
+            self._force_auth = True
+            return CD_ABORT_AND_RETRY
     
     @staticmethod
     def _check_discovery_packet(data,addr):
@@ -375,6 +383,8 @@ class BroadlinkRM3(BroadlinkUDP):
             if err == 0:
                 payload = self._decrypt(data[0x38:])
                 return CD_RETURN_IMMEDIATELY,payload[0x04:]
+            else:
+                self._force_auth = True
         return CD_CONTINUE_WAITING
     
     async def get_learned_key(self,timeout=30):
