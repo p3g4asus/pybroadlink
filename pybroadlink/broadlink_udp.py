@@ -87,7 +87,7 @@ class BroadlinkUDP:
     ID =  b'\x00\x00\x00\x00'
     def __repr__(self):
         return "%s[%s:%d] %s" % (self.__class__.__name__,*self._hp,BroadlinkUDP.print_mac(self._mac))
-        
+
     def __init__(self,hp,mac,devtype,timeout=3,**kwargs):
         self._hp = hp
         if isinstance(mac, bytes):
@@ -104,9 +104,9 @@ class BroadlinkUDP:
         self._id = BroadlinkUDP.ID
         self._count = random.randrange(0xffff)
         self._local_addr = ''
-        
-    
-    
+
+
+
     async def _protocol(self,generate_packet_fn,check_data_fun,timeout,retry=3,ensure_auth=False,is_broadcast=False,**kwargs):
         out_data = None
         timeout = self._timeout if timeout<=0 else timeout
@@ -137,7 +137,7 @@ class BroadlinkUDP:
         #     self.destroy_remote()
         #=======================================================================
         return out_data
-    
+
     async def _init_remote(self,ensure_auth,**kwargs):
         if not self._remote:
             try:
@@ -160,12 +160,11 @@ class BroadlinkUDP:
         if self._remote and ensure_auth and self._force_auth:
             if not await self.auth():
                 _LOGGER.warning("%s:%d auth FAIL",*self._hp)
-                self.destroy_remote()
             else:
                 _LOGGER.info("%s:%d auth OK",*self._hp)
                 self._force_auth = False
         return self._remote
-    
+
     def destroy_remote(self):
         if self._remote:
             try:
@@ -175,11 +174,11 @@ class BroadlinkUDP:
             self._remote = None
         self._key = BroadlinkUDP.KEY
         self._id = BroadlinkUDP.ID
-        
+
     @staticmethod
     def print_mac(mac_bytes):
         return binascii.hexlify(mac_bytes).decode('utf-8')
-    
+
     def _encrypt(self, payload):
         aes = AES.new(self._key, AES.MODE_CBC, self._iv)
         return aes.encrypt(bytes(payload))
@@ -187,7 +186,7 @@ class BroadlinkUDP:
     def _decrypt(self, payload):
         aes = AES.new(self._key, AES.MODE_CBC, self._iv)
         return aes.decrypt(bytes(payload))
-    
+
     def _check_auth_packet(self,data,addr):
         if len(data)>0x38:
             payload = self._decrypt(data[0x38:])
@@ -199,15 +198,15 @@ class BroadlinkUDP:
                     #print("New key",binascii.hexlify(key)," ",self._id)
                     return CD_RETURN_IMMEDIATELY
         return CD_CONTINUE_WAITING
-    
+
     def _check_generic_packet(self,data,addr):
         #print("CHECK ",data," ",len(data)>0x23," ",(data[0x22] | (data[0x23] << 8)))
         if len(data)>0x23 and (data[0x22] | (data[0x23] << 8))==0:
             return CD_RETURN_IMMEDIATELY
-        else: 
+        else:
             self._force_auth = True
             return CD_ABORT_AND_RETRY
-    
+
     @staticmethod
     def _check_discovery_packet(data,addr):
         if len(data)>=0x40:
@@ -216,7 +215,7 @@ class BroadlinkUDP:
             return (CD_ADD_AND_CONTINUE_WAITING,{'hp':addr,'mac':mac,'devtype':devtype})
         else:
             return CD_CONTINUE_WAITING
-    
+
     def _decorate_packet(self,command,payload):
         self._count = (self._count + 1) & 0xffff
         packet = bytearray(0x38)
@@ -243,25 +242,25 @@ class BroadlinkUDP:
         packet[0x31] = self._id[1]
         packet[0x32] = self._id[2]
         packet[0x33] = self._id[3]
-    
+
         # pad the payload for AES encryption
         if len(payload)>0:
             numpad=(len(payload)//16+1)*16
             payload=payload.ljust(numpad, b"\x00")
-    
+
         checksum = 0xbeaf
         for i in range(len(payload)):
             checksum += payload[i]
             checksum = checksum & 0xffff
-    
+
         payload = self._encrypt(payload)
-    
+
         packet[0x34] = checksum & 0xff
         packet[0x35] = checksum >> 8
-    
+
         for i in range(len(payload)):
             packet.append(payload[i])
-    
+
         checksum = 0xbeaf
         for i in range(len(packet)):
             checksum += packet[i]
@@ -269,8 +268,15 @@ class BroadlinkUDP:
         packet[0x20] = checksum & 0xff
         packet[0x21] = checksum >> 8
         return packet
-    
+
     async def auth(self,timeout = -1,retry = 3):
+        if not await self._inner_auth():
+            self.destroy_remote()
+            return False
+        else:
+            return True
+
+    async def _inner_auth(self,timeout = -1,retry = 3):
         payload = bytearray(0x50)
         payload[0x04] = 0x31
         payload[0x05] = 0x31
@@ -296,9 +302,9 @@ class BroadlinkUDP:
         payload[0x34] = ord(' ')
         payload[0x35] = ord(' ')
         payload[0x36] = ord('1')
-    
+
         return await self._protocol(partial(self._decorate_packet, 0x65, payload),self._check_auth_packet,timeout,retry)
-        
+
     @staticmethod
     async def discovery(local_ip_address,broadcast_address='255.255.255.255',timeout=5,retry=3):
         fake = BroadlinkUDP((broadcast_address,PORT),b'\x00\x01\x02\x03\x04\x05',0x00,timeout)
@@ -335,13 +341,13 @@ class BroadlinkUDP:
             packet[0x1d] = port >> 8
             packet[0x26] = 6
             checksum = 0xbeaf
-            
+
             for i in range(len(packet)):
                 checksum += packet[i]
             checksum = checksum & 0xffff
             packet[0x20] = checksum & 0xff
             packet[0x21] = checksum >> 8
-        
+
             out_data = await fake._protocol(packet,
                                   BroadlinkUDP._check_discovery_packet, timeout, retry,ensure_auth=False,is_broadcast=True)
             fake.destroy_remote()
@@ -359,10 +365,10 @@ class BroadlinkUDP:
         return dict()
 
 class BroadlinkRM3(BroadlinkUDP):
-    
+
     def __init__(self, hp, mac, devtype = 0x2737, timeout=3, **kwargs):
         BroadlinkUDP.__init__(self, hp, mac, devtype, timeout=timeout, **kwargs)
-    
+
     async def emit_ir(self,databytes,timeout=-1,retry=3):
         payload = bytearray([0x02, 0x00, 0x00, 0x00])
         payload += databytes
@@ -371,12 +377,12 @@ class BroadlinkRM3(BroadlinkUDP):
             return rv[0]
         else:
             return None
-    
+
     async def enter_learning_mode(self,timeout=-1,retry=3):
         payload = bytearray(16)
         payload[0] = 3
         return await self._protocol(partial(self._decorate_packet, 0x6a, payload),self._check_generic_packet,timeout,retry,True)
-    
+
     def _check_learn_ir_get_packet(self,data,addr):
         if len(data)>0x38:
             err = data[0x22] | (data[0x23] << 8)
@@ -386,7 +392,7 @@ class BroadlinkRM3(BroadlinkUDP):
             else:
                 self._force_auth = True
         return CD_CONTINUE_WAITING
-    
+
     async def get_learned_key(self,timeout=30):
         tim = max([5,timeout])
         payload = bytearray(16)
@@ -399,7 +405,7 @@ class BroadlinkRM3(BroadlinkUDP):
             if rv:
                 return rv[0]
         return None
-    
+
 if __name__ == '__main__': # pragma: no cover
     import sys
     import logging
@@ -415,7 +421,7 @@ if __name__ == '__main__': # pragma: no cover
             _LOGGER.info("Discovery OK %s",rv)
         else:
             _LOGGER.warning("Discovery failed")
-            
+
     async def emit_test(*args):
         import re
         mo = re.search('^[a-fA-F0-9]+$', args[4])

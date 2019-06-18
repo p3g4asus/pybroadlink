@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="pybroadlink",
-    version="1.4",
+    version="1.5",
     author="p3g4asus",
     author_email="fulminedipegasus@gmail.com",
     description="Asyncio module for Broadlink devices control",
